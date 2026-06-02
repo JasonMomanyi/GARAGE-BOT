@@ -50,6 +50,7 @@ async function generateAIResponse(text, userName) {
 }
 
 let currentQR = null;
+let isConnected = false;
 
 // Create a web server to serve the QR code and keep Render.com Web Service happy
 const app = express();
@@ -69,8 +70,10 @@ app.get('/', (req, res) => {
                 </body>
             </html>
         `);
-    } else {
+    } else if (isConnected) {
         res.send('🚗 ABC Garage Bot is running smoothly and connected to WhatsApp!');
+    } else {
+        res.send('🔄 ABC Garage Bot is currently reconnecting or restarting. Please refresh this page in 10 seconds...');
     }
 });
 app.listen(PORT, () => console.log(`🌍 Web server listening on port ${PORT}. Go to the Render URL to view the QR code!`));
@@ -101,7 +104,9 @@ async function startBot() {
         logger: pino({ level: 'silent' }),
         printQRInTerminal: true,
         auth: state,
-        browser: Browsers.macOS('Desktop')
+        browser: Browsers.macOS('Desktop'),
+        syncFullHistory: false, // Prevents Render Free Tier from running out of memory
+        generateHighQualityLinkPreview: false
     });
     
     sock.ev.on('creds.update', saveCreds);
@@ -119,12 +124,14 @@ async function startBot() {
 
         if (connection === 'close') {
             currentQR = null;
+            isConnected = false;
             const statusCode = (lastDisconnect.error)?.output?.statusCode;
             const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
             console.log('connection closed due to ', lastDisconnect.error, ', reconnecting ', shouldReconnect);
             
             if (shouldReconnect) {
-                startBot();
+                console.log('Reconnecting in 5 seconds...');
+                setTimeout(startBot, 5000); // Prevent WhatsApp rate-limit bans by waiting 5s
             } else {
                 console.log('⚠️ Session was logged out from WhatsApp (Unpaired). Purging old credentials to generate a new QR...');
                 try {
@@ -133,10 +140,12 @@ async function startBot() {
                     console.log('No existing session to drop.');
                 }
                 // Restart to generate fresh QR
-                startBot();
+                console.log('Restarting in 5 seconds...');
+                setTimeout(startBot, 5000);
             }
         } else if (connection === 'open') {
             currentQR = null;
+            isConnected = true;
             console.log('✅ Bot successfully connected to WhatsApp!');
         }
     });
