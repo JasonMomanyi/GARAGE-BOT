@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ABC Garage - Bot Pairing</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="background-orbs">
+        <div class="orb orb-1"></div>
+        <div class="orb orb-2"></div>
+        <div class="orb orb-3"></div>
+    </div>
+
+    <div class="glass-container">
+        <div class="header">
+            <h1>ABC Garage</h1>
+            <p>WhatsApp QR Code Portal</p>
+        </div>
+
+        <div id="step-1" class="step active">
+            <h2>Link Your Account</h2>
+            <p class="description">Click the button below to generate a secure QR code. You can then scan it with your WhatsApp app.</p>
+            
+            <div class="input-group">
+                <button id="btn-request-code" class="btn primary">Generate QR Code</button>
+            </div>
+            <p id="error-message" class="error-msg hidden"></p>
+        </div>
+
+        <div id="step-2" class="step hidden">
+            <h2>Scan QR Code</h2>
+            <p class="description">Open WhatsApp > Linked Devices > Link a Device. Point your phone at this screen.</p>
+            
+            <div id="loading" class="hidden">
+                <div class="spinner"></div>
+                <p>Generating QR Code...</p>
+            </div>
+
+            <div class="qr-container hidden" id="qr-container">
+                <img id="qr-image" src="" alt="WhatsApp QR Code" />
+            </div>
+
+            <div class="status-box">
+                <div class="pulse-ring"></div>
+                <p>Waiting for scan...</p>
+            </div>
+        </div>
+
+        <div id="step-3" class="step hidden">
+            <div class="success-icon">✓</div>
+            <h2>Successfully Linked!</h2>
+            <p class="description">Your WhatsApp account has been securely connected to the ABC Garage bot.</p>
+            <p class="instruction">You can now close this window and run <code>node bot.js</code> in your terminal.</p>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

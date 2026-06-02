@@ -1,2 +1,5 @@
 settings.json
 gift/database/settings.json
+node_modules
+.env
+auth_info_baileys/
