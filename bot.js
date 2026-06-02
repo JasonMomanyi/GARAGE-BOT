@@ -4,6 +4,8 @@ const express = require('express');
 const pino = require('pino');
 const axios = require('axios');
 const qrcode = require('qrcode');
+const fs = require('fs');
+const path = require('path');
 const { runtime, gmdFancy } = require('./gift');
 const { connectDB, getSetting, setSetting, getAvailableCars, searchCars, getMongoClient } = require('./database'); // Import DB
 require('dotenv').config();
@@ -72,6 +74,17 @@ app.get('/', (req, res) => {
     }
 });
 app.listen(PORT, () => console.log(`🌍 Web server listening on port ${PORT}. Go to the Render URL to view the QR code!`));
+
+// Dynamically load all command plugins
+const commandsMap = new Map();
+const commandsPath = path.join(__dirname, 'commands');
+if (!fs.existsSync(commandsPath)) fs.mkdirSync(commandsPath);
+const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
+for (const file of commandFiles) {
+    const command = require(`./commands/${file}`);
+    commandsMap.set(command.name, command);
+}
+console.log(`✅ Loaded ${commandsMap.size} command plugins dynamically.`);
 
 async function startBot() {
     await connectDB(); // Initialize MongoDB first
@@ -155,103 +168,23 @@ async function startBot() {
         console.log(`Received message from ${remoteJid}: ${text}`);
 
         // ----------------------------------------------------
-        // 1. PREFIX COMMAND ROUTER
+        // 1. PREFIX COMMAND ROUTER (MODULAR PLUGINS)
         // ----------------------------------------------------
         if (textLower.startsWith(PREFIX)) {
             const args = text.slice(PREFIX.length).trim().split(/ +/);
-            const command = args.shift().toLowerCase();
+            const cmdName = args.shift().toLowerCase();
 
-            switch (command) {
-                case 'ping':
-                    await sock.sendMessage(remoteJid, { text: "Pong! Bot is active and responding rapidly. 🚀" });
-                    return;
-
-                case 'runtime':
-                    // Pass current process uptime to runtime function from gift
-                    const timeStr = runtime(process.uptime());
-                    const runtimeMsg = `⏱️ *System Uptime:*\n${timeStr}`;
-                    await sock.sendMessage(remoteJid, { text: runtimeMsg });
-                    return;
-
-                case 'fancy':
-                    if (!args.length) {
-                        await sock.sendMessage(remoteJid, { text: "Please provide text to stylize. Example: `.fancy Hello World`" });
-                        return;
-                    }
-                    await sock.sendMessage(remoteJid, { text: args.join(" ") }); // gmdFancy removed due to incompatibility
-                    return;
-
-                case 'group':
-                    const toggle = args[0]?.toLowerCase();
-                    if (toggle === 'on') {
-                        await setSetting('group_responses', 'on');
-                        await sock.sendMessage(remoteJid, { text: "✅ Group responses have been ENABLED." });
-                    } else if (toggle === 'off') {
-                        await setSetting('group_responses', 'off');
-                        await sock.sendMessage(remoteJid, { text: "🚫 Group responses have been DISABLED." });
-                    } else {
-                        await sock.sendMessage(remoteJid, { text: "Usage: `.group on` or `.group off`" });
-                    }
-                    return;
-
-                case 'cars':
-                    const cars = await getAvailableCars();
-                    if (cars.length === 0) {
-                        await sock.sendMessage(remoteJid, { text: "No cars currently available." });
-                        return;
-                    }
-                    let carList = "🚗 *AVAILABLE VEHICLES IN ABC GARAGE* 🚗\n\n";
-                    cars.forEach(car => {
-                        carList += `🔹 *${car.brand} ${car.model}* (${car.year})\n💰 Price: ${car.price}\n\n`;
-                    });
-                    carList += "Reply with `.search <brand>` to find specific cars!";
-                    await sock.sendMessage(remoteJid, { text: carList });
-                    return;
-
-                case 'search':
-                    if (!args.length) {
-                        await sock.sendMessage(remoteJid, { text: "Please provide a brand to search. Example: `.search Toyota`" });
-                        return;
-                    }
-                    const query = args.join(" ");
-                    const results = await searchCars(query);
-                    
-                    if (results.length === 0) {
-                        await sock.sendMessage(remoteJid, { text: `No vehicles found matching "${query}".` });
-                        return;
-                    }
-                    
-                    let searchRes = `🔍 *Search Results for "${query}"*\n\n`;
-                    results.forEach(car => {
-                        searchRes += `🔹 *${car.brand} ${car.model}* (${car.year}) - [${car.status}]\n💰 Price: ${car.price}\n\n`;
-                    });
-                    await sock.sendMessage(remoteJid, { text: searchRes });
-                    return;
-
-                case 'menu':
-                case 'help':
-                    const menu = `🚗 *Welcome to ABC Garage!* 🛠️\n\n` +
-                                 `*Commands:*\n` +
-                                 `🔹 .cars (View available vehicles)\n` +
-                                 `🔹 .search <brand> (Search inventory)\n` +
-                                 `🔹 .ping\n` +
-                                 `🔹 .runtime\n` +
-                                 `🔹 .group on/off (Admin toggle)\n` +
-                                 `🔹 .menu\n\n` +
-                                 `*Quick Options:*\n` +
-                                 `1️⃣ Book Service\n` +
-                                 `2️⃣ Service Pricing\n` +
-                                 `3️⃣ Vehicle Status\n` +
-                                 `4️⃣ Speak to an Agent\n\n` +
-                                 `_(Or just tell me what you need using natural language!)_`;
-                    
-                    await sock.sendMessage(remoteJid, { text: menu });
-                    return;
-
-                default:
-                    await sock.sendMessage(remoteJid, { text: `❌ Unknown command: ${PREFIX}${command}` });
-                    return;
+            if (commandsMap.has(cmdName)) {
+                try {
+                    await commandsMap.get(cmdName).execute(sock, remoteJid, args, textLower, msg, commandsMap);
+                } catch (error) {
+                    console.error(`Error executing command ${cmdName}:`, error);
+                    await sock.sendMessage(remoteJid, { text: `❌ Error executing .${cmdName}` });
+                }
+            } else {
+                await sock.sendMessage(remoteJid, { text: `❌ Unknown command: ${PREFIX}${cmdName}\nType .help to see all commands.` });
             }
+            return;
         }
         
         // ----------------------------------------------------
@@ -271,7 +204,8 @@ async function startBot() {
             const menu = `🚗 *Welcome to ABC Garage!* 🛠️\n\n` +
                          `*Commands:*\n` +
                          `🔹 .cars (View available vehicles)\n` +
-                         `🔹 .search <brand> (Search inventory)\n\n` +
+                         `🔹 .search <brand> (Search inventory)\n` +
+                         `🔹 .help (View all commands)\n\n` +
                          `*Quick Options:*\n` +
                          `1️⃣ Book Service\n` +
                          `2️⃣ Service Pricing\n` +
@@ -279,6 +213,21 @@ async function startBot() {
                          `4️⃣ Speak to an Agent\n\n` +
                          `_(Or just tell me what you need using natural language!)_`;
             await sock.sendMessage(remoteJid, { text: menu });
+            return;
+        }
+
+        if (textLower === '1') {
+            await sock.sendMessage(remoteJid, { text: "📅 *Book a Service*\nPlease reply with the date and time you'd like to bring your vehicle in, and our team will confirm your appointment shortly!" });
+            return;
+        }
+
+        if (textLower === '2') {
+            await sock.sendMessage(remoteJid, { text: "💰 *Service Pricing*\n- Basic Service: Ksh 5,000\n- Full Service: Ksh 15,000\n- Diagnostics: Ksh 3,000\n- Engine Overhaul: Custom Quote\n\nReply with what you need!" });
+            return;
+        }
+
+        if (textLower === '3') {
+            await sock.sendMessage(remoteJid, { text: "🔧 *Vehicle Status*\nPlease reply with your vehicle's license plate number (e.g., KCA 123A) to check its repair status." });
             return;
         }
 
