@@ -1,8 +1,10 @@
 const { default: makeWASocket, DisconnectReason, fetchLatestBaileysVersion, Browsers } = require('@whiskeysockets/baileys');
 const { useMongoDBAuthState } = require('./mongoAuth');
+const express = require('express');
 const pino = require('pino');
 const axios = require('axios');
-const { runtime, gmdFancy } = require('./gift'); // Import utilities from the gift folder
+const qrcode = require('qrcode-terminal');
+const { runtime, gmdFancy } = require('./gift');
 const { connectDB, getSetting, setSetting, getAvailableCars, searchCars, getMongoClient } = require('./database'); // Import DB
 require('dotenv').config();
 
@@ -45,6 +47,12 @@ async function generateAIResponse(text, userName) {
     }
 }
 
+// Create a dummy web server to keep Render.com Web Service happy
+const app = express();
+const PORT = process.env.PORT || 3000;
+app.get('/', (req, res) => res.send('🚗 ABC Garage Bot is running smoothly!'));
+app.listen(PORT, () => console.log(`🌍 Web server listening on port ${PORT} to keep Render happy!`));
+
 async function startBot() {
     await connectDB(); // Initialize MongoDB first
     
@@ -66,7 +74,15 @@ async function startBot() {
     sock.ev.on('creds.update', saveCreds);
     
     sock.ev.on('connection.update', (update) => {
-        const { connection, lastDisconnect } = update;
+        const { connection, lastDisconnect, qr } = update;
+        
+        if (qr) {
+            console.log('\n======================================================');
+            console.log('📸 SCAN THIS QR CODE WITH YOUR WHATSAPP TO LOG IN 📸');
+            console.log('======================================================\n');
+            qrcode.generate(qr, { small: true });
+        }
+
         if (connection === 'close') {
             const shouldReconnect = (lastDisconnect.error)?.output?.statusCode !== DisconnectReason.loggedOut;
             console.log('connection closed due to ', lastDisconnect.error, ', reconnecting ', shouldReconnect);
