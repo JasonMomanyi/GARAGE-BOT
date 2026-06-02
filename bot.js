@@ -3,7 +3,7 @@ const { useMongoDBAuthState } = require('./mongoAuth');
 const express = require('express');
 const pino = require('pino');
 const axios = require('axios');
-const qrcode = require('qrcode-terminal');
+const qrcode = require('qrcode');
 const { runtime, gmdFancy } = require('./gift');
 const { connectDB, getSetting, setSetting, getAvailableCars, searchCars, getMongoClient } = require('./database'); // Import DB
 require('dotenv').config();
@@ -47,11 +47,31 @@ async function generateAIResponse(text, userName) {
     }
 }
 
-// Create a dummy web server to keep Render.com Web Service happy
+let currentQR = null;
+
+// Create a web server to serve the QR code and keep Render.com Web Service happy
 const app = express();
 const PORT = process.env.PORT || 3000;
-app.get('/', (req, res) => res.send('🚗 ABC Garage Bot is running smoothly!'));
-app.listen(PORT, () => console.log(`🌍 Web server listening on port ${PORT} to keep Render happy!`));
+app.get('/', (req, res) => {
+    if (currentQR) {
+        res.send(`
+            <html style="background-color: #f0f2f5; font-family: sans-serif;">
+                <body style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0;">
+                    <div style="background: white; padding: 40px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); text-align: center;">
+                        <h2>🔗 Link WhatsApp to ABC Garage</h2>
+                        <p>Scan this QR code using the <b>Linked Devices</b> option in WhatsApp.</p>
+                        <img src="${currentQR}" style="border: 2px solid #ddd; border-radius: 10px; padding: 10px; width: 250px; height: 250px;" />
+                        <p style="color: #666; font-size: 14px; margin-top: 20px;">This page will refresh automatically...</p>
+                        <script>setTimeout(() => window.location.reload(), 5000);</script>
+                    </div>
+                </body>
+            </html>
+        `);
+    } else {
+        res.send('🚗 ABC Garage Bot is running smoothly and connected to WhatsApp!');
+    }
+});
+app.listen(PORT, () => console.log(`🌍 Web server listening on port ${PORT}. Go to the Render URL to view the QR code!`));
 
 async function startBot() {
     await connectDB(); // Initialize MongoDB first
@@ -73,23 +93,26 @@ async function startBot() {
     
     sock.ev.on('creds.update', saveCreds);
     
-    sock.ev.on('connection.update', (update) => {
+    sock.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect, qr } = update;
         
         if (qr) {
             console.log('\n======================================================');
-            console.log('📸 SCAN THIS QR CODE WITH YOUR WHATSAPP TO LOG IN 📸');
+            console.log('📸 NEW QR GENERATED! CLICK YOUR RENDER URL TO SCAN IT:');
+            console.log(`🌐 https://${process.env.RENDER_EXTERNAL_HOSTNAME || 'your-render-url.onrender.com'}`);
             console.log('======================================================\n');
-            qrcode.generate(qr, { small: true });
+            currentQR = await qrcode.toDataURL(qr);
         }
 
         if (connection === 'close') {
+            currentQR = null;
             const shouldReconnect = (lastDisconnect.error)?.output?.statusCode !== DisconnectReason.loggedOut;
             console.log('connection closed due to ', lastDisconnect.error, ', reconnecting ', shouldReconnect);
             if (shouldReconnect) {
                 startBot();
             }
         } else if (connection === 'open') {
+            currentQR = null;
             console.log('✅ Bot successfully connected to WhatsApp!');
         }
     });
