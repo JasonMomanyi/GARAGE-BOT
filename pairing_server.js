@@ -1,6 +1,6 @@
 const express = require('express');
 const { default: makeWASocket, DisconnectReason, fetchLatestBaileysVersion, Browsers } = require('@whiskeysockets/baileys');
-const { useMongoDBAuthState } = require('mongo-baileys');
+const { useMongoDBAuthState } = require('./mongoAuth');
 const pino = require('pino');
 const path = require('path');
 const fs = require('fs');

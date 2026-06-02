@@ -1,5 +1,5 @@
 const { default: makeWASocket, DisconnectReason, fetchLatestBaileysVersion, Browsers } = require('@whiskeysockets/baileys');
-const { useMongoDBAuthState } = require('mongo-baileys');
+const { useMongoDBAuthState } = require('./mongoAuth');
 const pino = require('pino');
 const axios = require('axios');
 const { runtime, gmdFancy } = require('./gift'); // Import utilities from the gift folder

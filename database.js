@@ -1,5 +1,13 @@
 const { MongoClient } = require('mongodb');
+const dns = require('dns');
 require('dotenv').config();
+
+// Bypass local ISP/Router DNS blocking of MongoDB SRV records
+try {
+    dns.setServers(['8.8.8.8', '1.1.1.1']);
+} catch (e) {
+    console.log("Could not override DNS servers.");
+}
 
 const uri = process.env.MONGODB_URI;
 if (!uri) {
