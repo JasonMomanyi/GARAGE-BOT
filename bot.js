@@ -106,9 +106,20 @@ async function startBot() {
 
         if (connection === 'close') {
             currentQR = null;
-            const shouldReconnect = (lastDisconnect.error)?.output?.statusCode !== DisconnectReason.loggedOut;
+            const statusCode = (lastDisconnect.error)?.output?.statusCode;
+            const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
             console.log('connection closed due to ', lastDisconnect.error, ', reconnecting ', shouldReconnect);
+            
             if (shouldReconnect) {
+                startBot();
+            } else {
+                console.log('⚠️ Session was logged out from WhatsApp (Unpaired). Purging old credentials to generate a new QR...');
+                try {
+                    await getMongoClient().db('garage_bot').collection('auth_info_baileys').drop();
+                } catch(e) {
+                    console.log('No existing session to drop.');
+                }
+                // Restart to generate fresh QR
                 startBot();
             }
         } else if (connection === 'open') {
