@@ -119,10 +119,7 @@ async function startBot() {
     
     sock.ev.on('messages.upsert', async m => {
         const msg = m.messages[0];
-        if (!msg.message || msg.key.fromMe) return;
-        
-        const remoteJid = msg.key.remoteJid;
-        const isGroup = remoteJid.endsWith('@g.us');
+        if (!msg.message) return;
         
         // Extract text depending on message type
         let text = msg.message.conversation || 
@@ -131,6 +128,12 @@ async function startBot() {
         
         const textLower = text.trim().toLowerCase();
         if (!textLower) return;
+
+        // Ignore messages sent by you (the master), UNLESS it is a command starting with '.'
+        if (msg.key.fromMe && !textLower.startsWith(PREFIX)) return;
+
+        const remoteJid = msg.key.remoteJid;
+        const isGroup = remoteJid.endsWith('@g.us');
 
         // Group Settings Logic
         const groupResponses = await getSetting('group_responses');
